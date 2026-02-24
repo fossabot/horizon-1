@@ -1,0 +1,4 @@
+# Ignorar arquivos de resultado do benchmark
+*.txt
+*.json
+*.csv

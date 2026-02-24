@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Build output
+dist/
+bin/
+*.exe
+horizon
+
+# IDE
+.idea/
+.vscode/
+
+# Documentation
+*.md
+!README.md
+
+# Docker/deployment files (avoid recursion)
+deployments/
+benchmarks/
+
+# Scripts
+scripts/
+
+# Data
+data/
+
+# Test files
+*_test.go
+coverage.*
+
+# Temp
+tmp/
+temp/

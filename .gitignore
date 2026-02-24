@@ -1,0 +1,42 @@
+# Binaries
+horizon
+horizon.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build output
+dist/
+bin/
+out/
+
+# Test binary
+*.test
+
+# Coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directory (runtime)
+data/
+
+# Logs
+*.log
+logs/
+
+# Temp files
+tmp/
+temp/

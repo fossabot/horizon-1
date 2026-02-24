@@ -1,0 +1,63 @@
+services:
+  horizon:
+    build:
+      context: ..
+      dockerfile: build/Dockerfile
+    container_name: horizon
+    ports:
+      - "9092:9092"
+    volumes:
+      - horizon-data:/data
+    environment:
+      - HORIZON_BROKER_ID=1
+      - HORIZON_HOST=0.0.0.0
+      - HORIZON_PORT=9092
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Builder service for cross-compilation
+  builder:
+    image: golang:1.22-alpine
+    container_name: horizon-builder
+    working_dir: /app
+    volumes:
+      - ..:/app
+      - go-cache:/go/pkg/mod
+    command: >
+      sh -c "
+        echo 'Building Horizon for multiple platforms...' &&
+        mkdir -p /app/dist &&
+        
+        echo 'Downloading dependencies...' &&
+        go mod tidy &&
+        
+        echo 'Building Linux AMD64...' &&
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -o /app/dist/horizon-linux-amd64 ./cmd/horizon &&
+        
+        echo 'Building Linux ARM64...' &&
+        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags='-s -w' -o /app/dist/horizon-linux-arm64 ./cmd/horizon &&
+        
+        echo 'Building Windows AMD64...' &&
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' -o /app/dist/horizon-windows-amd64.exe ./cmd/horizon &&
+        
+        echo 'Building Windows ARM64...' &&
+        CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags='-s -w' -o /app/dist/horizon-windows-arm64.exe ./cmd/horizon &&
+        
+        echo 'Building macOS AMD64...' &&
+        CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags='-s -w' -o /app/dist/horizon-darwin-amd64 ./cmd/horizon &&
+        
+        echo 'Building macOS ARM64...' &&
+        CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags='-s -w' -o /app/dist/horizon-darwin-arm64 ./cmd/horizon &&
+        
+        echo 'Build complete! Binaries in ./dist/'
+      "
+    profiles:
+      - build
+
+volumes:
+  horizon-data:
+  go-cache:
