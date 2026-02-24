@@ -1,0 +1,29 @@
+# OpenMessaging Benchmark
+# Build do framework de benchmark
+
+FROM maven:3.9-eclipse-temurin-17 AS builder
+
+WORKDIR /build
+
+# Clone e build do OpenMessaging Benchmark
+RUN apt-get update && apt-get install -y git && \
+    git clone --depth 1 https://github.com/confluentinc/openmessaging-benchmark.git . && \
+    mvn clean install -DskipTests -Dlicense.skip=true
+
+# Runtime image
+FROM eclipse-temurin:17-jre
+
+WORKDIR /benchmark
+
+# Copiar binários
+COPY --from=builder /build/package/target/openmessaging-benchmark-*-bin.tar.gz /tmp/
+RUN tar -xzf /tmp/openmessaging-benchmark-*-bin.tar.gz -C /benchmark --strip-components=1 && \
+    rm /tmp/*.tar.gz
+
+# Diretório para resultados
+RUN mkdir -p /results /tmp/benchmark-results
+
+# Configurar PATH
+ENV PATH="/benchmark/bin:${PATH}"
+
+# Sem ENTRYPOINT para permitir command flexivel

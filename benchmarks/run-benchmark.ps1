@@ -13,17 +13,26 @@
 .PARAMETER Target
     Alvo do benchmark: "kafka", "horizon" ou "compare" (ambos)
 
+.PARAMETER Workload
+    Tipo de workload: "throughput" ou "latency"
+
 .PARAMETER MessageSize
     Tamanho da mensagem em bytes (default: 1024)
 
 .PARAMETER MessageCount
     Quantidade de mensagens a enviar (default: 100000)
 
+.PARAMETER Duration
+    Duracao do teste em minutos (default: 2)
+
 .EXAMPLE
     .\run-benchmark.ps1 -Target compare
     
 .EXAMPLE
     .\run-benchmark.ps1 -Target horizon -MessageCount 500000
+
+.EXAMPLE
+    .\run-benchmark.ps1 -Target compare -Workload latency
 
 .NOTES
     Requisitos:
@@ -37,10 +46,17 @@ param(
     [string]$Target = "compare",
     
     [Parameter(Mandatory=$false)]
+    [ValidateSet("throughput", "latency")]
+    [string]$Workload = "throughput",
+    
+    [Parameter(Mandatory=$false)]
     [int]$MessageSize = 1024,
     
     [Parameter(Mandatory=$false)]
-    [int]$MessageCount = 100000
+    [int]$MessageCount = 100000,
+    
+    [Parameter(Mandatory=$false)]
+    [int]$Duration = 2
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,8 +69,10 @@ Write-Host "================================================================" -F
 Write-Host ""
 Write-Host "Configuracao:" -ForegroundColor Cyan
 Write-Host "  Target:        $Target"
+Write-Host "  Workload:      $Workload"
 Write-Host "  Message Size:  $MessageSize bytes"
 Write-Host "  Message Count: $MessageCount"
+Write-Host "  Duration:      $Duration minutos"
 Write-Host ""
 
 # Criar diretorio de resultados
@@ -90,6 +108,8 @@ if ($Target -eq "horizon" -or $Target -eq "compare") {
 Push-Location $ScriptDir
 
 try {
+    $WorkloadFile = "$Workload-1kb.yaml"
+    
     # Definir variaveis de ambiente para docker-compose
     $env:NUM_RECORDS = "$MessageCount"
     $env:RECORD_SIZE = "$MessageSize"
@@ -100,10 +120,7 @@ try {
             Write-Host "--- Executando benchmark contra Apache Kafka ---" -ForegroundColor Cyan
             Write-Host ""
             
-            docker-compose -f docker-compose-benchmark.yml up -d kafka
-            Write-Host "Aguardando Kafka iniciar..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 30
-            docker-compose -f docker-compose-benchmark.yml run --rm benchmark-kafka
+            docker-compose -f docker-compose-benchmark.yml up --abort-on-container-exit benchmark-kafka
             docker-compose -f docker-compose-benchmark.yml down -v
         }
         
@@ -121,10 +138,7 @@ try {
             Write-Host "--- Executando benchmark contra Apache Kafka ---" -ForegroundColor Cyan
             Write-Host ""
             
-            docker-compose -f docker-compose-benchmark.yml up -d kafka
-            Write-Host "Aguardando Kafka iniciar..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 30
-            docker-compose -f docker-compose-benchmark.yml run --rm benchmark-kafka
+            docker-compose -f docker-compose-benchmark.yml up --abort-on-container-exit benchmark-kafka
             docker-compose -f docker-compose-benchmark.yml down -v
             
             # Depois Horizon

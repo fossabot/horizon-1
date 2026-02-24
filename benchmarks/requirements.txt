@@ -1,0 +1,8 @@
+# Benchmark de Performance - Horizon vs Apache Kafka
+# Testa throughput e latência de produção de mensagens
+
+confluent-kafka>=2.3.0
+testcontainers>=4.0.0
+docker>=7.0.0
+rich>=13.0.0
+numpy>=1.26.0

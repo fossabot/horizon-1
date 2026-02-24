@@ -335,7 +335,7 @@ BenchmarkPartitionWrite-8  1000000   1102 ns/op    3.6 GB/s
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Contributing
 

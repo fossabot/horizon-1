@@ -1,0 +1,22 @@
+# Workload: Throughput Test com mensagens de 1KB
+# Baseado no benchmark oficial da Confluent: https://developer.confluent.io/learn/kafka-performance/
+#
+# Objetivo: Medir throughput maximo estavel (producer+consumer mantem ritmo)
+
+name: throughput-1kb-100k
+
+topics: 1
+partitionsPerTopic: 8
+messageSize: 1024
+payloadFile: ""
+
+subscriptionsPerTopic: 1
+consumerPerSubscription: 1
+producersPerTopic: 4
+
+testDurationMinutes: 2
+
+# Taxa de producao (0 = maximo possivel)
+producerRate: 0
+
+consumerBacklogSizeGB: 0

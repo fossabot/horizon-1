@@ -1,0 +1,12 @@
+# Resultados de benchmark (gerados)
+results/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Docker
+.docker/

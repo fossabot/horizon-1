@@ -1,0 +1,23 @@
+# Workload: Latency Test com mensagens de 1KB
+# Baseado no benchmark oficial da Confluent
+#
+# Objetivo: Medir latencia em carga moderada (200K msg/s target)
+
+name: latency-1kb-200k
+
+topics: 1
+partitionsPerTopic: 8
+messageSize: 1024
+payloadFile: ""
+
+subscriptionsPerTopic: 1
+consumerPerSubscription: 1
+producersPerTopic: 4
+
+testDurationMinutes: 2
+
+# Taxa fixa para medir latencia (mensagens/segundo por producer)
+# 50000 * 4 producers = 200K msg/s
+producerRate: 50000
+
+consumerBacklogSizeGB: 0
