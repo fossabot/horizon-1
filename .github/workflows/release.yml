@@ -4,8 +4,10 @@
 # What it does:
 #   1. Runs tests
 #   2. Builds binaries for Linux, macOS, Windows (amd64 + arm64)
-#   3. Creates a GitHub Release with all binaries + checksums
-#   4. Builds and pushes multi-platform Docker images to Docker Hub
+#   3. Generates changelog from conventional commits (git-cliff)
+#   4. Creates a GitHub Release with all binaries + checksums + changelog
+#   5. Commits updated CHANGELOG.md to the default branch
+#   6. Builds and pushes multi-platform Docker images to Docker Hub
 #
 # Required secrets:
 #   DOCKERHUB_USERNAME — Docker Hub username
@@ -124,12 +126,41 @@ jobs:
           path: dist/horizon-${{ matrix.goos }}-${{ matrix.goarch }}.*
 
   # ===========================================================================
-  # 3. Create GitHub Release
+  # 3. Generate Changelog
+  # ===========================================================================
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.cliff.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog for this release
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Upload changelog fragment
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGES.md
+
+  # ===========================================================================
+  # 4. Create GitHub Release
   # ===========================================================================
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-binaries]
+    needs: [build-binaries, changelog]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -151,10 +182,15 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release notes
-        id: notes
+      - name: Download changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+
+      - name: Build release notes
         run: |
-          cat <<'EOF' > release-notes.md
+          cat <<'HEADER' > release-notes.md
           ## Horizon ${{ steps.version.outputs.VERSION }}
 
           ### Docker Images
@@ -180,7 +216,13 @@ jobs:
           ```bash
           sha256sum -c checksums-sha256.txt
           ```
-          EOF
+
+          ---
+
+          HEADER
+
+          # Append the generated changelog
+          cat CHANGES.md >> release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -189,12 +231,45 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          generate_release_notes: true
           files: |
             artifacts/*
 
   # ===========================================================================
-  # 4. Build & Push Docker images to Docker Hub (multi-platform)
+  # 5. Update CHANGELOG.md in repository
+  # ===========================================================================
+  update-changelog:
+    name: Update CHANGELOG.md
+    runs-on: ubuntu-latest
+    needs: [release]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate full changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --verbose
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Commit CHANGELOG.md
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit to default branch
+          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | awk '{print $NF}')
+          git add CHANGELOG.md
+          git diff --staged --quiet && echo "No changes to CHANGELOG.md" && exit 0
+          git commit -m "docs: update CHANGELOG.md for ${GITHUB_REF_NAME}"
+          git push origin HEAD:${DEFAULT_BRANCH}
+
+  # ===========================================================================
+  # 6. Build & Push Docker images to Docker Hub (multi-platform)
   # ===========================================================================
   docker:
     name: Docker Hub

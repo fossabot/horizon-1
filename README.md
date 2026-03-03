@@ -1,5 +1,17 @@
 # Horizon - Kafka-Compatible Event Streaming Platform
 
+<!-- Badges -->
+[![CI](https://github.com/darioajr/horizon/actions/workflows/ci.yml/badge.svg)](https://github.com/darioajr/horizon/actions/workflows/ci.yml)
+[![Release](https://github.com/darioajr/horizon/actions/workflows/release.yml/badge.svg)](https://github.com/darioajr/horizon/actions/workflows/release.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/darioajr/horizon?style=flat&logo=github)](https://github.com/darioajr/horizon/releases/latest)
+[![Docker Hub](https://img.shields.io/docker/v/darioajr/horizon?sort=semver&logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/darioajr/horizon)
+[![Docker Pulls](https://img.shields.io/docker/pulls/darioajr/horizon?logo=docker)](https://hub.docker.com/r/darioajr/horizon)
+[![Docker Image Size](https://img.shields.io/docker/image-size/darioajr/horizon?sort=semver&logo=docker)](https://hub.docker.com/r/darioajr/horizon)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/darioajr/horizon?logo=go)](go.mod)
+[![License](https://img.shields.io/github/license/darioajr/horizon)](LICENSE)
+
+> **Note:** Replace `OWNER` in the badge URLs above with your GitHub username or organization name.
+
 A high-performance, Kafka protocol-compatible event streaming platform implemented in Go. Inspired by WarpStream and EventHorizon.
 
 ## Features
