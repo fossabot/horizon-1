@@ -43,7 +43,7 @@ type Connection struct {
 func NewConnection(id int64, conn net.Conn, handler *RequestHandler) *Connection {
 	// Set TCP_NODELAY to minimize latency (disable Nagle's algorithm)
 	if tc, ok := conn.(*net.TCPConn); ok {
-		tc.SetNoDelay(true)
+		_ = tc.SetNoDelay(true)
 	}
 	return &Connection{
 		id:      id,

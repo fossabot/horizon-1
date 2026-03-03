@@ -1,6 +1,6 @@
-# Binaries
-horizon
-horizon.exe
+# Binaries (root only, not cmd/horizon/)
+/horizon
+/horizon.exe
 *.exe
 *.dll
 *.so

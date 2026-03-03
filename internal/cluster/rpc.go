@@ -96,7 +96,7 @@ func (s *RPCServer) handleConn(conn net.Conn) {
 			return
 		default:
 		}
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 
 		// Read frame: [4 bytes length][1 byte type][4 bytes corrID][payload]
 		hdr := make([]byte, 9)
@@ -144,8 +144,8 @@ func (s *RPCServer) writeResponse(conn net.Conn, corrID uint32, data []byte) {
 	binary.BigEndian.PutUint32(frame[0:], uint32(4+len(data)))
 	binary.BigEndian.PutUint32(frame[4:], corrID)
 	copy(frame[8:], data)
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write(frame)
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, _ = conn.Write(frame)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,14 +298,14 @@ func (c *RPCClient) Call(msgType byte, payload []byte) ([]byte, error) {
 	binary.BigEndian.PutUint32(frame[5:], corrID)
 	copy(frame[9:], payload)
 
-	c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if _, err := c.conn.Write(frame); err != nil {
 		c.close()
 		return nil, fmt.Errorf("rpc write: %w", err)
 	}
 
 	// Read response: [4 len][4 corrID][data]
-	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	respHdr := make([]byte, 8)
 	if _, err := io.ReadFull(c.reader, respHdr); err != nil {
 		c.close()

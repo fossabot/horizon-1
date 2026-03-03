@@ -201,7 +201,7 @@ func (r *Replicator) reportOffset(leaderID int32, topic string, partition int32,
 	binary.BigEndian.PutUint64(payload[off:], uint64(offset))
 	off += 8
 	binary.BigEndian.PutUint32(payload[off:], uint32(r.cluster.cfg.NodeID))
-	client.Call(rpcAckOffset, payload)
+	_, _ = client.Call(rpcAckOffset, payload)
 }
 
 func (r *Replicator) sleep(d time.Duration, stop chan struct{}) {

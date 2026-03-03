@@ -158,7 +158,7 @@ func (g *Gossip) receiveLoop() {
 			return
 		default:
 		}
-		g.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = g.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		n, remoteAddr, err := g.conn.ReadFromUDP(buf)
 		if err != nil {
 			continue // timeout or shutdown
@@ -325,7 +325,7 @@ func (g *Gossip) sendTo(addr *net.UDPAddr, msgType byte) {
 		log.Printf("[gossip] packet too large (%d bytes), dropping", len(data))
 		return
 	}
-	g.conn.WriteToUDP(data, addr)
+	_, _ = g.conn.WriteToUDP(data, addr)
 }
 
 func (g *Gossip) sendJoin() {

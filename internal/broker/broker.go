@@ -214,7 +214,7 @@ func (b *Broker) backgroundTasks() {
 		case <-b.shutdownCh:
 			return
 		case <-syncTicker.C:
-			b.log.Sync()
+			_ = b.log.Sync()
 		}
 	}
 }
