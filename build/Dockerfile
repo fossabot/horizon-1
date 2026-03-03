@@ -1,5 +1,23 @@
-# Build stage
-FROM golang:1.22-alpine AS builder
+# =============================================================================
+# Multi-platform build (linux/amd64, linux/arm64)
+# Usage:
+#   docker buildx build --platform linux/amd64,linux/arm64 -f build/Dockerfile .
+#   docker buildx build --platform linux/amd64,linux/arm64 -t horizon:latest --push .
+# =============================================================================
+
+# Build stage — runs on the HOST architecture for speed
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+
+# Automatic ARGs injected by BuildKit
+ARG TARGETPLATFORM
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG TARGETVARIANT
+
+# Version info (can be overridden at build time)
+ARG VERSION=dev
+ARG COMMIT=none
+ARG BUILD_DATE=unknown
 
 # Install build dependencies
 RUN apk add --no-cache git make
@@ -13,24 +31,52 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build for Linux
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o horizon-linux-amd64 ./cmd/horizon
+# Build the binary for the TARGET platform (cross-compilation via Go env vars)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -o /app/horizon ./cmd/horizon
 
-# Build for Windows
-RUN CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o horizon-windows-amd64.exe ./cmd/horizon
+# =============================================================================
+# Optional: build Darwin binaries (extract with: docker buildx build --target=darwin-artifacts ...)
+# =============================================================================
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS darwin-builder
 
-# Runtime stage
+WORKDIR /app
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+
+ARG VERSION=dev
+ARG COMMIT=none
+ARG BUILD_DATE=unknown
+
+RUN CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -o /out/horizon-darwin-amd64 ./cmd/horizon && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -o /out/horizon-darwin-arm64 ./cmd/horizon
+
+# Stage to extract Darwin binaries (scratch image, no runtime)
+FROM scratch AS darwin-artifacts
+COPY --from=darwin-builder /out/ /
+
+# =============================================================================
+# Runtime stage — minimal image, matches the TARGET platform automatically
+# =============================================================================
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata && \
+    adduser -D -s /bin/sh horizon
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/horizon-linux-amd64 /app/horizon
+# Copy binary from builder (already compiled for the correct TARGETARCH)
+COPY --from=builder /app/horizon /app/horizon
 
 # Create data directory
-RUN mkdir -p /data
+RUN mkdir -p /data && chown horizon:horizon /data
 
 # Copy default config
 COPY configs/config.yaml /app/config.yaml
@@ -40,6 +86,8 @@ EXPOSE 9092 8080 9093
 
 # Volume for data persistence
 VOLUME ["/data"]
+
+USER horizon
 
 # Run horizon
 ENTRYPOINT ["/app/horizon"]

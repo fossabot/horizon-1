@@ -1,0 +1,259 @@
+# =============================================================================
+# Release workflow — triggered by pushing a version tag (e.g., v0.1.0)
+#
+# What it does:
+#   1. Runs tests
+#   2. Builds binaries for Linux, macOS, Windows (amd64 + arm64)
+#   3. Creates a GitHub Release with all binaries + checksums
+#   4. Builds and pushes multi-platform Docker images to Docker Hub
+#
+# Required secrets:
+#   DOCKERHUB_USERNAME — Docker Hub username
+#   DOCKERHUB_TOKEN   — Docker Hub access token (NOT password)
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/horizon
+
+jobs:
+  # ===========================================================================
+  # 1. Test
+  # ===========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  # ===========================================================================
+  # 2. Build binaries for all platforms
+  # ===========================================================================
+  build-binaries:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    needs: [test]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          BINARY_NAME="horizon-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          go build \
+            -ldflags="-s -w \
+              -X main.version=${{ steps.version.outputs.VERSION }} \
+              -X main.commit=${COMMIT} \
+              -X main.buildDate=${BUILD_DATE}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/horizon
+
+          echo "Built ${BINARY_NAME}"
+
+      - name: Create archive
+        run: |
+          cd dist
+          BINARY_NAME="horizon-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "horizon-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "${BINARY_NAME}"
+          else
+            tar czf "horizon-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "${BINARY_NAME}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/horizon-${{ matrix.goos }}-${{ matrix.goarch }}.*
+
+  # ===========================================================================
+  # 3. Create GitHub Release
+  # ===========================================================================
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum horizon-* > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          cat <<'EOF' > release-notes.md
+          ## Horizon ${{ steps.version.outputs.VERSION }}
+
+          ### Docker Images
+          ```bash
+          docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.VERSION }}
+          docker pull ${{ env.DOCKER_IMAGE }}:latest
+          ```
+
+          **Supported platforms:** `linux/amd64`, `linux/arm64`
+
+          ### Binary Downloads
+
+          | Platform | Architecture | File |
+          |----------|-------------|------|
+          | Linux    | amd64       | `horizon-linux-amd64.tar.gz` |
+          | Linux    | arm64       | `horizon-linux-arm64.tar.gz` |
+          | macOS    | amd64       | `horizon-darwin-amd64.tar.gz` |
+          | macOS    | arm64 (Apple Silicon) | `horizon-darwin-arm64.tar.gz` |
+          | Windows  | amd64       | `horizon-windows-amd64.zip` |
+          | Windows  | arm64       | `horizon-windows-arm64.zip` |
+
+          ### Verify checksums
+          ```bash
+          sha256sum -c checksums-sha256.txt
+          ```
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Horizon v${{ steps.version.outputs.VERSION }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          generate_release_notes: true
+          files: |
+            artifacts/*
+
+  # ===========================================================================
+  # 4. Build & Push Docker images to Docker Hub (multi-platform)
+  # ===========================================================================
+  docker:
+    name: Docker Hub
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "COMMIT=${COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta (tags & labels)
+        id: docker-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            # Tag: v1.2.3 → 1.2.3
+            type=semver,pattern={{version}}
+            # Tag: v1.2.3 → 1.2
+            type=semver,pattern={{major}}.{{minor}}
+            # Tag: v1.2.3 → 1
+            type=semver,pattern={{major}}
+            # latest
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up QEMU (ARM emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.VERSION }}
+            COMMIT=${{ steps.meta.outputs.COMMIT }}
+            BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
