@@ -70,7 +70,6 @@ func decodeGossipMessage(data []byte) (*gossipMessage, error) {
 
 // Gossip manages cluster membership via UDP heartbeats.
 type Gossip struct {
-	mu   sync.Mutex
 	state *ClusterState
 	self  *NodeInfo
 

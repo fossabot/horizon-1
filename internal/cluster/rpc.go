@@ -476,24 +476,7 @@ func decodeFetchPayload(payload []byte) (topic string, partition int32, offset i
 	return
 }
 
-func encodeFetchResponse(batches []*rpcBatch) []byte {
-	// [1 errCode][4 count]{ [4 len][data] }
-	size := 1 + 4
-	for _, b := range batches {
-		size += 4 + len(b.Data)
-	}
-	buf := make([]byte, size)
-	buf[0] = rpcErrNone
-	binary.BigEndian.PutUint32(buf[1:], uint32(len(batches)))
-	off := 5
-	for _, b := range batches {
-		binary.BigEndian.PutUint32(buf[off:], uint32(len(b.Data)))
-		off += 4
-		copy(buf[off:], b.Data)
-		off += len(b.Data)
-	}
-	return buf
-}
+
 
 // encodeStorageFetchResponse encodes storage.RecordBatch results for RPC.
 func encodeStorageFetchResponse(batches []*storage.RecordBatch) []byte {
@@ -517,10 +500,7 @@ func encodeStorageFetchResponse(batches []*storage.RecordBatch) []byte {
 	return buf
 }
 
-// rpcBatch is a thin wrapper used during RPC encode/decode of fetch results.
-type rpcBatch struct {
-	Data []byte
-}
+
 
 func countAssignments(table map[string]map[int32]*PartitionAssignment) int {
 	n := 0

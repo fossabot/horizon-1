@@ -104,11 +104,6 @@ func (h *RequestHandler) handleFetch(req *Request) *Response {
 			ft.partitions = append(ft.partitions, fp)
 		}
 
-		// Forgotten topics (v7+)
-		if req.ApiVersion >= 7 {
-			// Already consumed in the topics loop above
-		}
-
 		results = append(results, ft)
 	}
 

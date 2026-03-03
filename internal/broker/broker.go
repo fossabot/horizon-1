@@ -314,7 +314,7 @@ func (b *Broker) ProduceAutoPartition(topic string, key []byte, records []storag
 		numPartitions = 1
 	}
 
-	if key != nil && len(key) > 0 {
+	if len(key) > 0 {
 		// Consistent hash: crc32 of the key mod numPartitions
 		h := crc32.ChecksumIEEE(key)
 		partition = int32(h % uint32(numPartitions))
